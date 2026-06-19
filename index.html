@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>入退室受付</title>
+<style>
+  :root { --fg:#1f2933; --muted:#6b7280; --line:#e5e7eb; --accent:#0f6e56; --warn:#993c1d; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; margin:0; color:var(--fg); background:#f7f7f5; }
+  .wrap { max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; font-weight:600; margin:8px 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:16px; }
+  #reader { width:100%; min-height:300px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#000; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; margin-top:16px; }
+  .big { font-size:24px; font-weight:600; }
+  .ok { color:var(--accent); } .ng { color:var(--warn); }
+  .purposes { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
+  .chk { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:15px; cursor:pointer; background:#fff; }
+  .chk input { width:20px; height:20px; flex:none; }
+  .chk.on { border-color:var(--accent); background:#eafaf3; }
+  button { font-size:16px; font-weight:600; border:none; border-radius:10px; padding:14px 18px; cursor:pointer; width:100%; margin-top:8px; }
+  .primary { background:var(--accent); color:#fff; } .ghost { background:#eef0ee; color:var(--fg); }
+  .hidden { display:none; }
+  .note { font-size:13px; color:var(--muted); margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>入退室受付</h1>
+  <div class="sub">学生証のQRコードをカメラにかざしてください。</div>
+  <div id="reader"></div>
+  <div id="panel" class="card hidden"></div>
+  <div id="rescan" class="hidden"><button class="ghost" onclick="resume()">次の人を読み取る</button></div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  /* ===== ここだけ自分の値に書き換える ===== */
+  var GAS_URL = 'ここに あなたの exec URL を貼る';
+  var API_KEY = 'ここに 決めた合言葉 を貼る';
+  /* ======================================= */
+
+  var html5Qr, busy = false, lastCode = '', lastAt = 0;
+  var panel = document.getElementById('panel');
+  var rescan = document.getElementById('rescan');
+
+  // GAS API 呼び出し（GETでJSONを取得）
+  function api(params) {
+    var q = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return fetch(GAS_URL + '?' + q).then(function (r) { return r.json(); });
+  }
+
+  function start() {
+    html5Qr = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(function (cams) {
+      var camId = (cams && cams.length) ? cams[cams.length - 1].id : { facingMode: "environment" };
+      return html5Qr.start(camId, { fps: 10, qrbox: 250 }, onScan, function(){});
+    }).catch(function (e) {
+      document.getElementById('reader').innerHTML =
+        '<div style="color:#fff;padding:20px;font-size:14px">カメラを起動できませんでした（' + e + '）。カメラの許可を確認し、ページを再読み込みしてください。</div>';
+    });
+  }
+  window.addEventListener('load', start);
+
+  function onScan(text) {
+    var t = Date.now();
+    if (busy) return;
+    if (text === lastCode && t - lastAt < 4000) return;
+    lastCode = text; lastAt = t; busy = true;
+    api({ action: 'scan', apikey: API_KEY, qr: text }).then(afterScan).catch(fail);
+  }
+  function afterScan(res) {
+    if (!res.ok) { showMessage(res.message, false); return; }
+    if (res.action === 'exit') {
+      api({ action: 'exit', apikey: API_KEY, qr: lastCode }).then(afterPunch).catch(fail);
+    } else { showPurposeForm(res); }
+  }
+  function showPurposeForm(res) {
+    var html = '<div class="big">' + esc(res.name) + ' さん</div>'
+             + '<div class="note">入室です。今日の目的を選んでください（複数選択可）。</div><div class="purposes">';
+    res.purposes.forEach(function (p) {
+      html += '<label class="chk" onclick="toggle(this)"><input type="checkbox" value="' + p.id + '"><span>' + esc(p.name) + '</span></label>';
+    });
+    html += '</div><button class="primary" onclick="confirmEntry()">入室を記録する</button>'
+          + '<button class="ghost" onclick="resume()">やり直す</button>';
+    panel.innerHTML = html; panel.classList.remove('hidden'); rescan.classList.add('hidden');
+  }
+  function toggle(label){ var cb=label.querySelector('input'); setTimeout(function(){label.classList.toggle('on',cb.checked);},0); }
+  function confirmEntry() {
+    var ids = Array.prototype.map.call(panel.querySelectorAll('input:checked'), function(c){return c.value;});
+    panel.innerHTML = '<div class="big">記録中…</div>';
+    api({ action: 'entry', apikey: API_KEY, qr: lastCode, purposes: ids.join(',') }).then(afterPunch).catch(fail);
+  }
+  function afterPunch(res) {
+    if (!res.ok) { showMessage(res.message, false); return; }
+    var msg, detail;
+    if (res.action === 'entry') {
+      msg = '入室を記録しました（' + res.time + '）';
+      detail = res.purposes && res.purposes.length ? '目的：' + res.purposes.join('・') : '';
+    } else {
+      msg = '退室を記録しました（' + res.time + '）';
+      detail = '滞在時間：' + res.stay_min + ' 分　お疲れさまでした。';
+    }
+    panel.innerHTML = '<div class="big ok">' + esc(res.name) + ' さん</div>'
+                    + '<div style="margin:8px 0;font-size:18px">' + msg + '</div>'
+                    + '<div class="note">' + esc(detail) + '</div>';
+    panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
+    setTimeout(resume, 5000);
+  }
+  function showMessage(message, ok) {
+    panel.innerHTML = '<div class="big ' + (ok?'ok':'ng') + '">' + esc(message) + '</div>';
+    panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
+  }
+  function fail(err){ showMessage('通信エラーが発生しました。もう一度お試しください。', false); busy = false; }
+  function resume(){ panel.classList.add('hidden'); rescan.classList.add('hidden'); panel.innerHTML=''; busy=false; lastCode=''; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+</script>
+</body>
+</html>
