@@ -57,7 +57,7 @@
     html5Qr = new Html5Qrcode("reader");
     Html5Qrcode.getCameras().then(function (cams) {
       var camId = (cams && cams.length) ? cams[cams.length - 1].id : { facingMode: "environment" };
-      return html5Qr.start(camId, { fps: 10, qrbox: 250 }, onScan, function(){});
+      return html5Qr.start(camId, { fps: 20, qrbox: { width: 320, height: 320 }, aspectRatio: 1.0 }, onScan, function(){});
     }).catch(function (e) {
       document.getElementById('reader').innerHTML =
         '<div style="color:#fff;padding:20px;font-size:14px">カメラを起動できませんでした（' + e + '）。カメラの許可を確認し、ページを再読み込みしてください。</div>';
