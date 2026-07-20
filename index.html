@@ -128,7 +128,6 @@
                     + '<div style="margin:8px 0;font-size:18px">' + msg + '</div>'
                     + '<div class="note">' + esc(detail) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
-    setTimeout(resume, 5000);
   }
   function showMessage(message, ok) {
     panel.innerHTML = '<div class="big ' + (ok?'ok':'ng') + '">' + esc(message) + '</div>';
