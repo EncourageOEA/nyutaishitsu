@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>入退室受付</title>
 <style>
   :root { --fg:#1f2933; --muted:#6b7280; --line:#e5e7eb; --accent:#0f6e56; --warn:#993c1d; }
@@ -12,6 +13,7 @@
   h1 { font-size:20px; font-weight:600; margin:8px 0 4px; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:16px; }
   #reader { width:100%; min-height:300px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#000; }
+  #reader video { width:100% !important; height:auto !important; }
   .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; margin-top:16px; }
   .big { font-size:24px; font-weight:600; }
   .ok { color:var(--accent); } .ng { color:var(--warn); }
@@ -23,48 +25,64 @@
   .primary { background:var(--accent); color:#fff; } .ghost { background:#eef0ee; color:var(--fg); }
   .hidden { display:none; }
   .note { font-size:13px; color:var(--muted); margin-top:10px; }
+  #startBtn { background:var(--accent); color:#fff; padding:16px; font-size:17px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>入退室受付</h1>
   <div class="sub">学生証のQRコードをカメラにかざしてください。</div>
-  <div id="reader"></div>
+ 
+  <div id="startWrap">
+    <button id="startBtn" onclick="start()">カメラを起動する</button>
+    <div class="note">初回はカメラの使用許可が必要です。</div>
+  </div>
+ 
+  <div id="reader" class="hidden"></div>
   <div id="panel" class="card hidden"></div>
   <div id="rescan" class="hidden"><button class="ghost" onclick="resume()">次の人を読み取る</button></div>
 </div>
-
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+ 
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ===== ここだけ自分の値に書き換える ===== */
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbz3CC2XFhsehEB2KcynPhMb6fFaUhM364EUbqr0CfYLi7u7-zZFKNqowoNaZRi9x5U/exec';
   var API_KEY = 'OkinawaEncourageAcademy';
   /* ======================================= */
-
+ 
   var html5Qr, busy = false, lastCode = '', lastAt = 0;
   var panel = document.getElementById('panel');
   var rescan = document.getElementById('rescan');
-
-  // GAS API 呼び出し（GETでJSONを取得）
+  var reader = document.getElementById('reader');
+  var startWrap = document.getElementById('startWrap');
+ 
   function api(params) {
     var q = Object.keys(params).map(function (k) {
       return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
     }).join('&');
     return fetch(GAS_URL + '?' + q).then(function (r) { return r.json(); });
   }
-
+ 
   function start() {
-    html5Qr = new Html5Qrcode("reader");
-    Html5Qrcode.getCameras().then(function (cams) {
-      var camId = (cams && cams.length) ? cams[cams.length - 1].id : { facingMode: "environment" };
-      return html5Qr.start(camId, { fps: 20, qrbox: { width: 320, height: 320 }, aspectRatio: 1.0 }, onScan, function(){});
-    }).catch(function (e) {
-      document.getElementById('reader').innerHTML =
-        '<div style="color:#fff;padding:20px;font-size:14px">カメラを起動できませんでした（' + e + '）。カメラの許可を確認し、ページを再読み込みしてください。</div>';
-    });
+    startWrap.classList.add('hidden');
+    reader.classList.remove('hidden');
+    html5Qr = new Html5Qrcode("reader", { verbose: false });
+    var config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      videoConstraints: {
+        facingMode: { ideal: "environment" }
+      }
+    };
+    html5Qr.start({ facingMode: { ideal: "environment" } }, config, onScan, function () {})
+      .catch(function (e) {
+        reader.innerHTML =
+          '<div style="color:#fff;padding:20px;font-size:14px">カメラを起動できませんでした（' + e + '）。<br><br>'
+          + '設定 → Safari → カメラ が「許可」になっているかご確認ください。</div>';
+      });
   }
-  window.addEventListener('load', start);
-
+ 
   function onScan(text) {
     var t = Date.now();
     if (busy) return;
@@ -88,7 +106,7 @@
           + '<button class="ghost" onclick="resume()">やり直す</button>';
     panel.innerHTML = html; panel.classList.remove('hidden'); rescan.classList.add('hidden');
   }
-  function toggle(label){ var cb=label.querySelector('input'); setTimeout(function(){label.classList.toggle('on',cb.checked);},0); }
+  function toggle(label) { var cb = label.querySelector('input'); setTimeout(function(){ label.classList.toggle('on', cb.checked); }, 0); }
   function confirmEntry() {
     var ids = Array.prototype.map.call(panel.querySelectorAll('input:checked'), function(c){return c.value;});
     panel.innerHTML = '<div class="big">記録中…</div>';
@@ -114,9 +132,12 @@
     panel.innerHTML = '<div class="big ' + (ok?'ok':'ng') + '">' + esc(message) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
   }
-  function fail(err){ showMessage('通信エラーが発生しました。もう一度お試しください。', false); busy = false; }
-  function resume(){ panel.classList.add('hidden'); rescan.classList.add('hidden'); panel.innerHTML=''; busy=false; lastCode=''; }
-  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  function fail(err) { showMessage('通信エラーが発生しました。もう一度お試しください。', false); busy = false; }
+  function resume() {
+    panel.classList.add('hidden'); rescan.classList.add('hidden'); panel.innerHTML = '';
+    busy = false; lastCode = '';
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
 </script>
 </body>
 </html>
