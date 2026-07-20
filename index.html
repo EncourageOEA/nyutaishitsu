@@ -138,6 +138,15 @@
   function resume() {
     panel.classList.add('hidden'); rescan.classList.add('hidden'); panel.innerHTML = '';
     busy = false; lastCode = '';
+    // iPhoneではカメラを一旦停止して再起動する方が安定する
+    if (html5Qr) {
+      html5Qr.stop().then(function () {
+        html5Qr.clear();
+        start();
+      }).catch(function () {
+        location.reload();
+      });
+    }
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
 </script>
