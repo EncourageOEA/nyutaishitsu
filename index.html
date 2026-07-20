@@ -32,43 +32,43 @@
 <div class="wrap">
   <h1>入退室受付</h1>
   <div class="sub">学生証のQRコードをカメラにかざしてください。</div>
- 
+
   <div id="startWrap">
     <button id="startBtn" onclick="start()">カメラを起動する</button>
     <div class="note">初回はカメラの使用許可が必要です。</div>
   </div>
- 
+
   <div id="reader" class="hidden"></div>
   <div id="panel" class="card hidden"></div>
-  <div id="rescan" class="hidden"><button class="ghost" onclick="resume()">次の人を読み取る</button></div>
+  <div id="rescan" class="hidden"><button class="ghost" onclick="location.reload()">次の人を読み取る</button></div>
 </div>
- 
+
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ===== ここだけ自分の値に書き換える ===== */
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbz3CC2XFhsehEB2KcynPhMb6fFaUhM364EUbqr0CfYLi7u7-zZFKNqowoNaZRi9x5U/exec';
   var API_KEY = 'OkinawaEncourageAcademy';
   /* ======================================= */
- 
+
   var html5Qr, busy = false, lastCode = '', lastAt = 0;
   var panel = document.getElementById('panel');
   var rescan = document.getElementById('rescan');
   var reader = document.getElementById('reader');
   var startWrap = document.getElementById('startWrap');
- 
+
   function api(params) {
     var q = Object.keys(params).map(function (k) {
       return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
     }).join('&');
     return fetch(GAS_URL + '?' + q).then(function (r) { return r.json(); });
   }
- 
+
   function start() {
     startWrap.classList.add('hidden');
     reader.classList.remove('hidden');
     html5Qr = new Html5Qrcode("reader", { verbose: false });
     var config = {
-       fps: 15,
+      fps: 15,
       qrbox: { width: 280, height: 280 },
       aspectRatio: 1.0,
       videoConstraints: {
@@ -84,7 +84,7 @@
           + '設定 → Safari → カメラ が「許可」になっているかご確認ください。</div>';
       });
   }
- 
+
   function onScan(text) {
     var t = Date.now();
     if (busy) return;
@@ -99,14 +99,16 @@
     } else { showPurposeForm(res); }
   }
   function showPurposeForm(res) {
+    if (html5Qr) { try { html5Qr.stop(); } catch(e){} }
     var html = '<div class="big">' + esc(res.name) + ' さん</div>'
              + '<div class="note">入室です。今日の目的を選んでください（複数選択可）。</div><div class="purposes">';
     res.purposes.forEach(function (p) {
       html += '<label class="chk" onclick="toggle(this)"><input type="checkbox" value="' + p.id + '"><span>' + esc(p.name) + '</span></label>';
     });
     html += '</div><button class="primary" onclick="confirmEntry()">入室を記録する</button>'
-          + '<button class="ghost" onclick="resume()">やり直す</button>';
+          + '<button class="ghost" onclick="location.reload()">やり直す</button>';
     panel.innerHTML = html; panel.classList.remove('hidden'); rescan.classList.add('hidden');
+    reader.classList.add('hidden');
   }
   function toggle(label) { var cb = label.querySelector('input'); setTimeout(function(){ label.classList.toggle('on', cb.checked); }, 0); }
   function confirmEntry() {
@@ -116,6 +118,8 @@
   }
   function afterPunch(res) {
     if (!res.ok) { showMessage(res.message, false); return; }
+    if (html5Qr) { try { html5Qr.stop(); } catch(e){} }
+    reader.classList.add('hidden');
     var msg, detail;
     if (res.action === 'entry') {
       msg = '入室を記録しました（' + res.time + '）';
@@ -128,19 +132,17 @@
                     + '<div style="margin:8px 0;font-size:18px">' + msg + '</div>'
                     + '<div class="note">' + esc(detail) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
-    setTimeout(resume, 3000);
+    setTimeout(function(){ location.reload(); }, 4000);
   }
   function showMessage(message, ok) {
+    if (html5Qr) { try { html5Qr.stop(); } catch(e){} }
+    reader.classList.add('hidden');
     panel.innerHTML = '<div class="big ' + (ok?'ok':'ng') + '">' + esc(message) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
+    setTimeout(function(){ location.reload(); }, 4000);
   }
   function fail(err) { showMessage('通信エラーが発生しました。もう一度お試しください。', false); busy = false; }
-    function resume() {
-    // iPhone Safari では毎回リロードするのが最も安定
-    location.reload();
-  }
- function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
-  window.addEventListener('load', function() { setTimeout(start, 100); });
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
 </script>
 </body>
 </html>
