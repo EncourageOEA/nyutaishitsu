@@ -68,11 +68,13 @@
     reader.classList.remove('hidden');
     html5Qr = new Html5Qrcode("reader", { verbose: false });
     var config = {
-      fps: 10,
-      qrbox: { width: 250, height: 250 },
+       fps: 15,
+      qrbox: { width: 280, height: 280 },
       aspectRatio: 1.0,
       videoConstraints: {
-        facingMode: { ideal: "environment" }
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       }
     };
     html5Qr.start({ facingMode: { ideal: "environment" } }, config, onScan, function () {})
