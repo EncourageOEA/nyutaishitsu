@@ -128,27 +128,19 @@
                     + '<div style="margin:8px 0;font-size:18px">' + msg + '</div>'
                     + '<div class="note">' + esc(detail) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
+    setTimeout(resume, 3000);
   }
   function showMessage(message, ok) {
     panel.innerHTML = '<div class="big ' + (ok?'ok':'ng') + '">' + esc(message) + '</div>';
     panel.classList.remove('hidden'); rescan.classList.remove('hidden'); busy = false;
   }
   function fail(err) { showMessage('通信エラーが発生しました。もう一度お試しください。', false); busy = false; }
-  function resume() {
-    panel.classList.add('hidden'); rescan.classList.add('hidden'); panel.innerHTML = '';
-    busy = false; lastCode = '';
-    // iPhoneではカメラを一旦停止して再起動する方が安定する
-    if (html5Qr) {
-      html5Qr.stop().then(function () {
-        html5Qr.clear();
-        start();
-      }).catch(function () {
-        location.reload();
-      });
-    }
+    function resume() {
+    // iPhone Safari では毎回リロードするのが最も安定
+    location.reload();
   }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+ function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+  window.addEventListener('load', function() { setTimeout(start, 100); });
 </script>
 </body>
 </html>
- 
